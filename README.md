@@ -1,75 +1,62 @@
-# FestPass — Docker & Container Security Assessment
-
-A containerized three-tier web application developed as part of the Docker & Container Security practical assessment (CA-2). The application allows students to register for college technical-fest events and demonstrates containerization, network isolation, persistent storage, vulnerability scanning, image publishing, and container image signing.
+# Docker & Container Security — Practical Assessment
 
 ## Student Information
 
-| Field                       | Details                                                  |
-| --------------------------- | -------------------------------------------------------- |
-| Name                        | Harsh Vardhan                                            |
-| Registration Number (REGNO) | `202401100100111`                                        |
-| Application Port (PORT)     | `8011`                                                   |
-| Docker Hub Username         | `harsh403931d`                                           |
-| Docker Hub Repository       | https://hub.docker.com/r/harsh403931d/fest-backend       |
-| GitHub Repository           | https://github.com/Harshvardhan1123/ca2_docker_container |
+| Field                 | Details                                                                          |
+| --------------------- | -------------------------------------------------------------------------------- |
+| Student Name          | Harsh Vardhan                                                                    |
+| Registration Number   | 202401100100111                                                                  |
+| Project               | FestPass — Containerized Event Registration Application                          |
+| Application Port      | 8011                                                                             |
+| Docker Hub Username   | `harsh403931d`                                                                   |
+| Docker Hub Repository | [harsh403931d/fest-backend](https://hub.docker.com/r/harsh403931d/fest-backend)  |
+| GitHub Repository     | [ca2_docker_container](https://github.com/Harshvardhan1123/ca2_docker_container) |
 
-## Project Overview
+---
 
-FestPass consists of three services:
+## 1. Project Overview
 
-* **Frontend:** Nginx serves the registration interface and forwards API requests to the backend.
-* **Backend:** A Python Flask API provides health-check and registration endpoints.
-* **Database:** PostgreSQL stores event registrations persistently.
+FestPass is a containerized event registration application developed to demonstrate Docker containerization, multi-container orchestration, network isolation, persistent storage, vulnerability scanning, image publishing, and cryptographic image signing.
 
-The application supports registering participants for Hackathon, Robo Race, and Tech Quiz events.
+The application uses a three-tier architecture:
 
-## Architecture
+* **Frontend:** Nginx serves the event registration interface.
+* **Backend:** A Python Flask API handles health checks and event registrations.
+* **Database:** PostgreSQL stores registration records persistently.
 
-```text
-                   Browser
-                      |
-                      | http://localhost:8011
-                      v
-               Frontend (Nginx)
-                      |
-                frontend_backend
-                      |
-                      v
-               Backend (Flask)
-                /           \
-               /             \
-      frontend_backend    backend_db
-                                |
-                                v
-                         PostgreSQL
-                                |
-                                v
-                       postgres_data volume
-```
+The application supports event registrations for Hackathon, Robo Race, and Tech Quiz.
 
-The frontend and backend share the `frontend_backend` network. The backend and database share the `backend_db` network. The database network is internal, and the frontend is not directly connected to the database network.
+The complete stack is managed using Docker Compose.
 
-PostgreSQL data is stored in the named Docker volume `postgres_data`, allowing registrations to survive container recreation.
+### Application URLs
 
-## Technology Stack
+| Endpoint      | URL                                       | Purpose                         |
+| ------------- | ----------------------------------------- | ------------------------------- |
+| Frontend      | `http://localhost:8011`                   | Event registration interface    |
+| Health Check  | `http://localhost:8011/api/health`        | Application and database health |
+| Registrations | `http://localhost:8011/api/registrations` | Retrieve saved registrations    |
+
+---
+
+## 2. Technology Stack
 
 * Docker and Docker Compose
 * Python 3.13.9
 * Flask
 * PostgreSQL 17 Alpine
 * Nginx 1.30 Alpine
-* Trivy vulnerability scanner
+* Trivy
 * Docker Hub
-* Cosign for container image signing and verification
+* Cosign
+* Git and GitHub
+* Ubuntu on WSL
 
-## Project Structure
+---
+
+## 3. Project Structure
 
 ```text
 ca2/
-├── README.md
-├── compose.yaml
-├── .env.example
-├── .gitignore
 ├── backend/
 │   ├── app.py
 │   ├── requirements.txt
@@ -82,140 +69,514 @@ ca2/
 │   ├── trivy-before.txt
 │   ├── trivy-after.txt
 │   └── trivy-final.txt
-└── screenshots/
+├── screenshots/
+│   └── Assessment evidence screenshots
+├── compose.yaml
+├── .env.example
+├── .gitignore
+├── cosign.pub
+└── README.md
 ```
 
-Additional files, including `cosign.pub` and evidence screenshots, will be included as the remaining assessment stages are completed.
+**Security note:** The private signing key (`cosign.key`) and `.env` file must not be committed to GitHub. The public verification key (`cosign.pub`) is included for signature verification.
 
-## Running the Application
+---
 
-### Prerequisites
+## 4. Stage 1 — Backend Containerization
 
-* Docker Engine or Docker Desktop with Docker Compose
-* Git
+The Flask backend was containerized using a Dockerfile.
 
-### 1. Clone the repository
+The container exposes port 5000 internally and provides API endpoints for health checks and registration management.
+
+### Build and Run
 
 ```bash
-git clone https://github.com/Harshvardhan1123/ca2_docker_container.git
-cd ca2_docker_container
+docker build -t fest-backend:0.1 ./backend
+
+docker run -d \
+  --name fest-backend-test \
+  -p 8011:5000 \
+  fest-backend:0.1
 ```
 
-### 2. Configure the database password
-
-Create a local `.env` file using the example:
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Set a strong value for `POSTGRES_PASSWORD`. Do not commit the `.env` file or publish its contents.
-
-### 3. Start the services
-
-```bash
-docker compose up -d --build
-```
-
-### 4. Check service status
-
-```bash
-docker compose ps
-```
-
-### 5. Test the backend health endpoint
+### Health Check
 
 ```bash
 curl http://localhost:8011/api/health
 ```
 
-The response should contain the registration number, application version, and database connection status.
+The endpoint was tested to confirm that the backend responded successfully.
 
-### 6. Open the frontend
+The temporary standalone test container was removed after testing.
 
-Visit:
+---
 
-http://localhost:8011
+## 5. Stage 2 — Multi-Container Application with Docker Compose
 
-Submit registrations through the web interface.
+The application was extended into a three-tier Docker Compose stack.
 
-### 7. Stop the application
+### Services
+
+| Service  | Image                             | Responsibility                                     |
+| -------- | --------------------------------- | -------------------------------------------------- |
+| Frontend | `nginx:1.30-alpine`               | Serves the user interface and proxies API requests |
+| Backend  | `harsh403931d/fest-backend:1.0.0` | Handles application logic and API requests         |
+| Database | `postgres:17-alpine`              | Stores registration records                        |
+
+### Network Isolation
+
+Two bridge networks are configured:
+
+1. `frontend_backend`
+
+   * Connects the frontend to the backend.
+   * Allows API requests to reach the backend.
+
+2. `backend_db`
+
+   * Connects the backend to PostgreSQL.
+   * Configured as an internal network to restrict external connectivity.
+
+The frontend is not directly connected to the database network.
+
+### Persistent Storage
+
+A named Docker volume, `postgres_data`, stores PostgreSQL data.
+
+This allows registration records to survive container removal and recreation.
+
+### Start the Application
+
+```bash
+docker compose up -d
+```
+
+### Verify Services
+
+```bash
+docker compose ps
+```
+
+### Verify Health
+
+```bash
+curl http://localhost:8011/api/health
+```
+
+### Verify Registrations
+
+```bash
+curl http://localhost:8011/api/registrations
+```
+
+The database health check ensures that PostgreSQL is ready before the backend starts.
+
+---
+
+## 6. Stage 3 — Container Vulnerability Scanning with Trivy
+
+Trivy was used to scan the backend container image for operating-system and Python package vulnerabilities.
+
+### Initial Image
+
+The initial image was `fest-backend:0.1`.
+
+The initial scan reported:
+
+| Metric                     | Initial Image |
+| -------------------------- | ------------: |
+| Total findings             |        13,357 |
+| Critical findings          |           234 |
+| High findings              |         2,244 |
+| Docker-reported disk usage |       1.61 GB |
+
+### Security Improvements
+
+The backend image was hardened through the following changes:
+
+* Updated the Python base image to `python:3.13.9-slim-trixie`.
+* Applied Debian package security updates during the image build.
+* Removed package-manager lists after installation.
+* Created a dedicated non-root application user.
+* Configured the container to run as `appuser`.
+* Disabled Python bytecode generation.
+* Enabled unbuffered Python output.
+* Disabled pip's package cache.
+* Upgraded pip and installed the declared application dependencies.
+
+### Final Image
+
+The final hardened image is `fest-backend:0.3`.
+
+The completed full scan reported:
+
+| Metric                          | Final Image |
+| ------------------------------- | ----------: |
+| High findings — Debian OS       |          44 |
+| High findings — Python packages |           5 |
+| **Total High findings**         |      **49** |
+| **Total Critical findings**     |       **0** |
+| Docker-reported disk usage      |      288 MB |
+| Runs as non-root                |         Yes |
+
+The final image reduced Docker-reported disk usage from 1.61 GB to 288 MB.
+
+The full scan still reported High-severity vulnerabilities. Therefore, the image should not be described as vulnerability-free.
+
+### Critical Vulnerability Check
+
+The following command checks for Critical vulnerabilities while ignoring unfixed findings:
+
+```bash
+trivy --timeout 15m image \
+  --scanners vuln \
+  --severity CRITICAL \
+  --ignore-unfixed \
+  --exit-code 1 \
+  fest-backend:0.3
+```
+
+The completed check reported zero Critical findings and exited with code `0`.
+
+### Reports
+
+The following scan reports are included in the repository:
+
+* `reports/trivy-before.txt`
+* `reports/trivy-after.txt`
+* `reports/trivy-final.txt`
+
+---
+
+## 7. Stage 4 — Docker Hub Publishing and Deployment
+
+The hardened application image was built with application version `1.0.0`.
+
+### Published Images
+
+Docker Hub repository:
+
+`harsh403931d/fest-backend`
+
+Published tags:
+
+| Tag     | Purpose                                                       |
+| ------- | ------------------------------------------------------------- |
+| `1.0.0` | Versioned release                                             |
+| `1.0`   | Additional release tag                                        |
+| `1.0.1` | Unsigned image used for the negative Cosign verification test |
+
+The `1.0` and `1.0.0` tags refer to the same published image digest.
+
+### Release Image Digest
+
+The published `1.0.0` image has the following registry digest:
+
+```text
+sha256:9fd56f87d3e443d67d639db47547607233a040569a61d50199c7e112a0737f7a
+```
+
+### Deploying the Published Image
+
+The backend service in `compose.yaml` uses the published Docker Hub image:
+
+```yaml
+backend:
+  image: harsh403931d/fest-backend:1.0.0
+  environment:
+    REGNO: "202401100100111"
+    APP_VERSION: "1.0.0"
+    DB_HOST: db
+    DB_NAME: festpass
+    DB_USER: festpass
+    DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  networks:
+    - frontend_backend
+    - backend_db
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+```
+
+The backend's local `build:` configuration was removed from the Compose service.
+
+The local backend images and tags were removed before pulling the published release.
+
+### Pull and Deploy
+
+```bash
+docker compose pull backend
+
+docker compose up -d
+
+docker compose ps
+```
+
+### Deployment Verification
+
+Health endpoint:
+
+```bash
+curl -s http://localhost:8011/api/health
+```
+
+Verified response:
+
+```json
+{
+  "container": "8d44b66ef38c",
+  "database": true,
+  "regno": "202401100100111",
+  "service": "festpass-backend",
+  "version": "1.0.0"
+}
+```
+
+The container identifier may differ after subsequent deployments.
+
+### Persistence Verification
+
+The following registrations were retrieved after redeployment:
+
+```json
+[
+  {
+    "event": "Hackathon",
+    "id": 1,
+    "name": "Harsh Vardhan"
+  },
+  {
+    "event": "Tech Quiz",
+    "id": 2,
+    "name": "harshtest"
+  }
+]
+```
+
+This confirmed that the existing registration records remained available after the stack was stopped, its containers were removed, and the published image was deployed.
+
+---
+
+## 8. Stage 5 — Docker Image Signing with Cosign
+
+Cosign was used to sign the published release image and verify its signature.
+
+The signing operation uses the immutable image digest rather than relying solely on a mutable tag.
+
+### Key Generation
+
+A Cosign key pair was generated using:
+
+```bash
+cosign generate-key-pair
+```
+
+The generated files are:
+
+* `cosign.key` — Private signing key.
+* `cosign.pub` — Public verification key.
+
+The private key was restricted to owner-only permissions:
+
+```bash
+chmod 600 cosign.key
+```
+
+The private key is excluded from Git using `.gitignore`.
+
+**Security requirement:** Never commit, publish, or share `cosign.key` or its password. Only `cosign.pub` is included in the submission.
+
+### Signing the Release Image
+
+The signed release image is:
+
+```text
+docker.io/harsh403931d/fest-backend@sha256:9fd56f87d3e443d67d639db47547607233a040569a61d50199c7e112a0737f7a
+```
+
+The image was signed using:
+
+```bash
+cosign sign --key cosign.key "$IMAGE"
+```
+
+The signature was successfully published to the container registry.
+
+### Signature Verification
+
+The signature was verified using the public key:
+
+```bash
+cosign verify --key cosign.pub "$IMAGE"
+```
+
+The verification output confirmed that:
+
+* The signature was verified against the specified public key.
+* The Cosign claims were validated.
+* The transparency-log entry was verified offline.
+
+**Result: Signature verification passed.**
+
+### Negative Test — Unsigned Image
+
+A separate image, version `1.0.1`, was published without a Cosign signature.
+
+Its registry digest is:
+
+```text
+sha256:32750b36eaec5893a572b3645e4fd3f23a23fcebd444f1dbd2ef300177c852c5
+```
+
+The unsigned image was tested with:
+
+```bash
+export UNSIGNED_IMAGE="docker.io/harsh403931d/fest-backend@sha256:32750b36eaec5893a572b3645e4fd3f23a23fcebd444f1dbd2ef300177c852c5"
+
+cosign verify --key cosign.pub "$UNSIGNED_IMAGE"
+```
+
+The command returned:
+
+```text
+Error: no signatures found
+error during command execution: no signatures found
+```
+
+This was the expected result because the image had not been signed.
+
+**Result: The unsigned-image verification test behaved as expected.**
+
+---
+
+## 9. Security Controls
+
+The following security measures were implemented:
+
+* Multi-container architecture with separate services.
+* Network isolation between frontend and database.
+* Internal backend-to-database network.
+* Persistent PostgreSQL storage using a named volume.
+* Non-root backend execution.
+* Operating-system package updates during image creation.
+* Trivy vulnerability scanning.
+* Docker Hub image publishing with versioned tags.
+* Cosign image signing and public-key verification.
+* `.env` excluded from Git.
+* Private signing key excluded from Git.
+* Public verification key included in the submission.
+
+### Environment Variables
+
+The application uses environment variables for database credentials.
+
+The actual `.env` file is local and must not be committed.
+
+The `.env.example` file contains a placeholder rather than the actual database password.
+
+---
+
+## 10. Useful Commands
+
+### Start the Stack
+
+```bash
+docker compose up -d
+```
+
+### Stop the Stack
 
 ```bash
 docker compose down
 ```
 
-The named PostgreSQL volume is retained when the stack is stopped this way. Do not use `docker compose down -v` if you want to preserve the registration data.
+Do not use `docker compose down -v` when the existing database records must be preserved.
 
-> After Stage 4, the Compose configuration will use the published Docker Hub backend image instead of building the backend locally.
+### Check Container Status
 
-## Container Security
+```bash
+docker compose ps
+```
 
-The initial backend image, `fest-backend:0.1`, used the Python 3.9 base image. The hardened image, `fest-backend:0.3`, uses a versioned slim Python base, installs available Debian package updates during the build, upgrades the Python dependencies, and runs the application as a non-root user.
+### Check Logs
 
-Security improvements include:
+```bash
+docker compose logs --tail=100
+```
 
-* Use of a slim Python base image.
-* Installation of available operating-system package updates during image construction.
-* Updated Flask and Werkzeug dependencies.
-* Installation of Python dependencies without retaining the pip download cache.
-* Execution as the unprivileged `appuser` account.
-* Removal of unnecessary APT package lists after package installation.
-* Vulnerability scanning with Trivy.
+### Check Application Health
 
-### Vulnerability Scan Results
+```bash
+curl -s http://localhost:8011/api/health
+```
 
-The initial scan of `fest-backend:0.1` reported the following findings:
+### List Registrations
 
-| Metric                               | Initial image (`fest-backend:0.1`) | Hardened image (`fest-backend:0.3`) |
-| ------------------------------------ | ---------------------------------: | ----------------------------------: |
-| Critical findings — full scan        |                                234 |    **Update after final full scan** |
-| High findings — full scan            |                              2,244 |    **Update after final full scan** |
-| Critical findings — assessment check |        Not yet recorded separately |                               **0** |
-| Disk usage                           |                            1.61 GB |                              288 MB |
-| Runs as non-root                     |                                 No |                                 Yes |
+```bash
+curl -s http://localhost:8011/api/registrations
+```
 
-The final image's targeted Trivy scan reported **zero Critical findings**. The assessment check using `--severity CRITICAL --ignore-unfixed --exit-code 1` also exited with code `0`.
+### Verify the Published Image Signature
 
-The final full-scan High and Critical counts must be recorded from the completed scan report. Image sizes are Docker's reported disk usage and may vary with local image layers.
+```bash
+cosign verify --key cosign.pub \
+  docker.io/harsh403931d/fest-backend@sha256:9fd56f87d3e443d67d639db47547607233a040569a61d50199c7e112a0737f7a
+```
 
-## Published Image
+---
 
-The secured backend image will be published to Docker Hub using versioned tags.
+## 11. Assessment Evidence
 
-| Item                   | Value                                          |
-| ---------------------- | ---------------------------------------------- |
-| Docker Hub repository  | `harsh403931d/fest-backend`                    |
-| Release version        | `1.0.0`                                        |
-| Additional release tag | `1.0`                                          |
-| Image digest           | **To be recorded after publishing in Stage 4** |
-| Signature verification | To be documented after Stage 5                 |
+The `screenshots/` directory should contain screenshots demonstrating the completed stages.
 
-The release image will be signed by digest using Cosign. The public verification key, `cosign.pub`, will be included in the repository. The private signing key must never be committed.
+Recommended evidence:
 
-## AI Tools Used
+| Screenshot                        | Evidence                                   |
+| --------------------------------- | ------------------------------------------ |
+| `S1-backend-containerization.png` | Backend image, container, and health check |
+| `S2-network-isolation.png`        | Docker Compose network isolation           |
+| `S2-persistence.png`              | Registration records and persistent volume |
+| `S3-trivy-before.png`             | Initial vulnerability scan                 |
+| `S3-trivy-after.png`              | Final vulnerability scan                   |
+| `S4-1-dockerhub-push.png`         | Successful image publishing and digest     |
+| `S4-2-dockerhub-tags.png`         | Docker Hub Tags page                       |
+| `S4-3-deployment.png`             | Published image deployed with Compose      |
+| `S4-3-persistence.png`            | Existing registrations after redeployment  |
+| `S5-3-signing.png`                | Successful image signing                   |
+| `S5-4-verification.png`           | Successful signature verification          |
+| `S5-5-unsigned-rejected.png`      | Expected rejection of unsigned image       |
 
-**ChatGPT (OpenAI):**
+Only screenshots that have actually been captured should be included in the final submission.
 
-* Assisted with understanding the practical assessment requirements.
-* Helped develop and troubleshoot the Dockerfile and Docker Compose configuration.
-* Explained Trivy vulnerability reports and suggested image-hardening improvements.
-* Assisted with command-line troubleshooting and README documentation.
+---
 
-All commands and tests are executed on my own development environment.
+## 12. Assessment Progress
 
-## Assessment Progress
+| Stage   | Description                                 | Result    |
+| ------- | ------------------------------------------- | --------- |
+| Stage 1 | Backend containerization                    | Completed |
+| Stage 2 | Docker Compose, networking, and persistence | Completed |
+| Stage 3 | Trivy scanning and image hardening          | Completed |
+| Stage 4 | Docker Hub publishing and deployment        | Completed |
+| Stage 5 | Cosign signing and verification             | Completed |
 
-* [x] Stage 1 — Containerize the backend.
-* [x] Stage 2 — Run the three-tier Compose stack with network isolation and persistent database storage.
-* [x] Stage 3 — Scan the initial image, harden the backend image, and pass the targeted Critical-vulnerability check.
-* [ ] Stage 4 — Publish versioned backend images to Docker Hub, record the `1.0.0` digest, and verify the application using the registry image.
-* [ ] Stage 5 — Sign version `1.0.0` with Cosign, verify the signature, and demonstrate rejection of unsigned version `1.0.1`.
+---
 
-## Incomplete Steps
+## 13. AI Assistance
 
-* Stage 4: Docker Hub publishing, recording the final image digest, and registry-based deployment verification are pending.
-* Stage 5: Cosign signing, signature verification, and unsigned-image rejection are pending.
+AI assistance was used to support the implementation, debugging, command preparation, and documentation of the practical.
 
-Update this section and the published-image details after completing the remaining stages.
+The container configuration, image publishing, vulnerability scans, deployment checks, persistent-data verification, and Cosign operations were executed and tested in the working environment.
+
+---
+
+## 14. Conclusion
+
+This practical demonstrates a complete container security workflow, from backend containerization to deployment of a published Docker image.
+
+Docker Compose provides service orchestration, network separation, and persistent storage. Trivy identifies image vulnerabilities and helps measure the effects of image hardening. Docker Hub provides versioned image distribution, while Cosign provides cryptographic image signing and verification.
+
+The final published release was deployed successfully, the existing registrations remained available, and Cosign successfully verified the signed release while rejecting the unsigned test image.
+
+The final image scan still reported 49 High-severity findings, so additional vulnerability remediation and ongoing image maintenance remain important.
